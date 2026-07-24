@@ -303,9 +303,3 @@ This repository is a research and product-design prototype, not a production-rea
 - オブジェクトストレージへの安全な画像保存
 - pytest、GitHub Actions、マイグレーション
 - 本番向けWSGIサーバーとクラウドデプロイ
-
-## Author
-
-**Ishou Ko**  
-Keio University — Computer Vision Researcher / AI Engineer
-
