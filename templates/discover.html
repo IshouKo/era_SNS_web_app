@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}発見 - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>{{ selected_zone }} の発見</h1>
+  <p class="muted">本人確認結果に基づく Safe Zone の投稿を表示しています。</p>
+</section>
+<section class="main-feed">
+  {% for tweet in tweets %}
+    <article class="post">
+      <div class="post-head">
+        <img class="avatar" src="{{ tweet.author.profile_image or 'https://api.dicebear.com/9.x/avataaars/svg?seed=' ~ tweet.author.username }}" alt="">
+        <div>
+          <a class="post-author" href="{{ url_for('main.profile', username=tweet.author.username) }}">{{ tweet.author.username }}</a>
+          <span class="post-time">・ {{ tweet.timestamp.strftime('%m/%d %H:%M') }} ・ {{ tweet.author.public_age_zone }}</span>
+        </div>
+      </div>
+      <p class="post-body">{{ tweet.body }}</p>
+    </article>
+  {% else %}
+    <article class="post"><p class="post-body">このゾーンの投稿はまだありません。</p></article>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+{% block title %}身分証明書アップロード - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>身分証明書をアップロード</h1>
+  <p class="muted">確認後、画像は承認または拒否時に削除されます。</p>
+  <form method="POST" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="file" name="id_card_file" required accept="image/png, image/jpeg, image/gif">
+    <button class="primary-button" type="submit">アップロードして次へ</button>
+  </form>
+</section>
+{% endblock %}

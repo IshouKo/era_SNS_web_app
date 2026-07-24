@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block title %}メッセージ - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>メッセージ</h1>
+  <form class="dm-form" method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input name="recipient" list="users" placeholder="宛先ユーザー名" required>
+    <datalist id="users">
+      {% for candidate in users %}<option value="{{ candidate.username }}"></option>{% endfor %}
+    </datalist>
+    <textarea name="body" rows="4" placeholder="メッセージ" required></textarea>
+    <button class="primary-button" type="submit">送信</button>
+  </form>
+</section>
+<section class="admin-panel">
+  {% for message in messages %}
+    <div class="message-row">
+      <div class="mini-avatar"></div>
+      <div>
+        <strong>{{ message.sender.username }} → {{ message.recipient.username }}</strong>
+        <p class="muted">{{ message.body }}</p>
+      </div>
+      <span class="post-time">{{ message.created_at.strftime('%m/%d %H:%M') }}</span>
+    </div>
+  {% else %}
+    <p class="muted">メッセージはまだありません。</p>
+  {% endfor %}
+</section>
+{% endblock %}

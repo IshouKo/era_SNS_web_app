@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block title %}顔写真撮影 - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>顔を撮影してください</h1>
+  <video id="videoElement" autoplay playsinline class="admin-image"></video>
+  <button id="captureButton" class="primary-button" type="button">撮影</button>
+  <canvas id="canvasElement" hidden></canvas>
+  <p class="muted" id="messageArea"></p>
+</section>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+  const video = document.getElementById('videoElement');
+  const canvas = document.getElementById('canvasElement');
+  const captureButton = document.getElementById('captureButton');
+  const messageArea = document.getElementById('messageArea');
+  const context = canvas.getContext('2d');
+
+  navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+    video.srcObject = stream;
+    video.play();
+  }).catch(function() {
+    messageArea.innerText = "カメラへのアクセスが許可されていません。";
+  });
+
+  captureButton.addEventListener('click', function() {
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    messageArea.innerText = '画像をアップロードしています...';
+    fetch('{{ url_for("verification.verify_face") }}', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: canvas.toDataURL('image/png') })
+    }).then(response => response.json()).then(data => {
+      messageArea.innerText = data.message;
+      if (data.redirect_url) window.location.href = data.redirect_url;
+    }).catch(() => {
+      messageArea.innerText = 'サーバーとの通信中にエラーが発生しました。';
+    });
+  });
+});
+</script>
+{% endblock %}

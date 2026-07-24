@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block title %}本人確認 - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>本人確認</h1>
+  <p class="muted">身分証明書と顔写真を提出すると、管理者確認後に Safe Zone が有効になります。</p>
+  <a class="primary-button" href="{{ url_for('verification.upload_id_card') }}">開始</a>
+</section>
+{% endblock %}

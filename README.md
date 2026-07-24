@@ -1,146 +1,77 @@
-# Era — Generation-Aware Social Networking Prototype
+# Era — Safe Zone SNS Prototype
 
-> A Flask-based SNS prototype exploring safer, age-aware online communities.
+Era is a Flask-based social networking prototype for safer, generation-aware online communities.
 
-Eraは、世代ごとの文化・共通言語・安全性を考慮したコミュニティ設計を目指すSNSプロトタイプです。現在の実装では、アカウント登録、本人確認、投稿、フォロー、プロフィール、管理者確認、JWT APIなど、SNSの基盤機能を構築しています。
+Eraは、本人確認と生年月日にもとづいてユーザーを抽象化された **Safe Zone** に案内し、実年齢を直接公開せずに世代別のタイムラインや交流を提供するSNSプロトタイプです。
 
-## Concept / コンセプト
+## Features / 実装済み機能
 
-一般的なSNSでは、年齢や生活背景が大きく異なるユーザーが同一空間に集まり、コミュニケーションの摩擦や安全上の問題が生じることがあります。
+- 生年月日ベースの年齢検証と Safe Zone 分類
+- 実年齢を公開しないプロフィール/API設計
+- 世代別タイムライン、発見ページ、おすすめユーザー
+- 投稿、画像添付、フォロー、プロフィール編集
+- いいね、返信、通知、DM
+- 投稿の通報、管理者モデレーション
+- ルールベース有害コンテンツ検知
+- OpenAI Moderation API 連携準備
+- メール認証、パスワードリセット
+- CSRF対策、簡易レート制限、監査ログ
+- ローカル画像保存ユーティリティ
+- Flask-Migrate / Alembic マイグレーション
+- pytest、GitHub Actions CI
+- Gunicorn によるWSGI起動
+- React + TypeScript + Vite frontend
+- スクリーンショット風の Era ダークUI
 
-Eraは将来的に、ユーザーを年齢層に応じた**Safe Zone**へ案内し、世代特有の文化や共通言語に基づくコミュニケーションを促進することを目指しています。
+## Safe Zone Design
 
-```text
-Registration
-     |
-     v
-Identity and Age Verification
-     |
-     v
-Age-aware Community Assignment (Roadmap)
-     |
-     v
-Generation-specific Timeline and Recommendations (Roadmap)
-```
-
-> **Important:** 年齢層別Safe Zoneへの自動振り分けと推薦アルゴリズムは、現在のリポジトリでは未実装です。現在は、その前提となるSNS・認証基盤を実装しています。
-
-## Implemented Features / 実装済み機能
-
-### Account and Authentication
-
-- ユーザー名、年齢、メールアドレス、パスワードによる登録
-- Werkzeugによるパスワードハッシュ化
-- セッションベースのWebログイン
-- JWTベースのAPI認証
-- ログアウト
-- ユーザー／管理者ロール
-
-### Identity Verification Prototype
-
-- 身分証明書画像のアップロード
-- ブラウザカメラで撮影した顔画像の受付
-- `face_recognition`による身分証画像と顔写真の照合
-- 管理者による確認キュー
-- 承認・却下ステータス管理
-- アップロード画像の管理
-
-### Social Features
-
-- 280文字以内の投稿
-- フォロー／フォロー解除
-- 自分とフォロー中ユーザーのタイムライン
-- ユーザープロフィール
-- 自己紹介の編集
-- プロフィール画像のアップロード
-- 投稿を新しい順に表示
-- ユーザー年齢の表示
-
-### REST API
-
-- JSONによるユーザー登録
-- JWTアクセストークン発行
-- 投稿作成
-- 自分の投稿取得
-- ユーザープロフィール取得
-- 自分のプロフィール更新
-- ロールベース認可用デコレータ
-
-## Architecture / アーキテクチャ
+Era does not expose exact age in public timelines or profile API responses.
 
 ```text
-Browser / API Client
-        |
-        v
-Flask Application
-        |
-        +--> Auth Blueprint
-        |      ├── Registration
-        |      ├── Login / Logout
-        |      └── Face Verification
-        |
-        +--> Main Blueprint
-        |      ├── Timeline
-        |      ├── Posts
-        |      ├── Profiles
-        |      └── Follow / Unfollow
-        |
-        +--> API Blueprint
-        |      └── JWT-protected REST endpoints
-        |
-        +--> Admin Blueprint
-               └── Verification review
-        |
-        v
-SQLAlchemy
-        |
-        v
-PostgreSQL
+Birth Date
+    |
+    v
+Age Calculation
+    |
+    v
+Identity / Admin Verification
+    |
+    v
+Safe Zone
+    |
+    v
+Generation-aware Timeline
 ```
 
-## Data Model / データモデル
+Current Safe Zone examples:
 
-### User
+| Age | Zone |
+|---:|---|
+| < 13 | キッズゾーン |
+| 13-17 | ティーンゾーン |
+| 18-29 | Z世代ゾーン |
+| 30-44 | ミレニアルゾーン |
+| 45-59 | アダルトゾーン |
+| 60+ | シニアゾーン |
 
-- Username
-- Email
-- Age
-- Password hash
-- Role
-- Bio
-- Profile image
-- Identity-document image
-- Face-scan image
-- Verification status
-- Created timestamp
-
-### Tweet
-
-- Body
-- Timestamp
-- Author
-
-### Follow
-
-- Follower
-- Followed user
-- Timestamp
-
-## Tech Stack / 技術スタック
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
 | Backend | Flask |
 | ORM | Flask-SQLAlchemy |
-| Database | PostgreSQL 15 |
-| Authentication | Flask Session, Flask-JWT-Extended |
+| Migration | Flask-Migrate / Alembic |
+| Database | PostgreSQL 15, SQLite for local smoke tests |
+| Auth | Flask Session, Flask-JWT-Extended |
 | Password Security | Werkzeug |
-| Face Matching | face_recognition, OpenCV, NumPy |
+| Moderation | Rule-based detection, optional OpenAI Moderation |
 | Frontend | Jinja2, HTML, CSS, JavaScript |
+| SPA Frontend | React, TypeScript, Vite, lucide-react |
+| Testing | pytest, GitHub Actions |
+| Production Server | Gunicorn |
 | Development | Docker, Docker Compose |
-| Language | Python |
 
-## Project Structure / ディレクトリ構成
+## Project Structure
 
 ```text
 era_SNS_web_app/
@@ -148,6 +79,7 @@ era_SNS_web_app/
 ├── config.py
 ├── db_instance.py
 ├── models.py
+├── services.py
 ├── routes/
 │   ├── auth_routes.py
 │   ├── main_routes.py
@@ -157,149 +89,322 @@ era_SNS_web_app/
 ├── templates/
 │   ├── auth/
 │   ├── admin/
+│   ├── verification/
 │   ├── index.html
-│   └── profile.html
+│   ├── profile.html
+│   ├── discover.html
+│   ├── messages.html
+│   └── notifications.html
 ├── static/
+│   ├── css/era.css
+│   └── img/Eraicon.png
+├── frontend/
+│   ├── package.json
+│   ├── vite.config.ts
+│   └── src/
+│       ├── App.tsx
+│       ├── api.ts
+│       ├── types.ts
+│       └── styles.css
+├── migrations/
+├── tests/
+├── .github/workflows/ci.yml
 ├── requirements.txt
 ├── Dockerfile
 ├── docker-compose.yml
 └── README.md
 ```
 
-## Quick Start with Docker / Dockerでの実行
+## File Responsibilities / ファイルの役割
 
-### 1. Clone the repository
+### Backend Core
 
-```bash
-git clone https://github.com/IshouKo/era_SNS_web_app.git
-cd era_SNS_web_app
-```
+| File | Role |
+|---|---|
+| `app.py` | Flaskアプリの生成地点です。設定読み込み、DB/JWT/Migrate初期化、Blueprint登録、CSRFトークン登録、簡易レート制限、初期管理者作成を担当します。 |
+| `config.py` | 環境変数からDB接続先、秘密鍵、OpenAI Moderation、アップロード保存先、メール送信元、レート制限などの設定をまとめます。 |
+| `db_instance.py` | SQLAlchemyの `db` インスタンスだけを定義します。循環importを避けるため、モデルやルートから共通で参照します。 |
+| `models.py` | DBテーブル定義です。`User`, `Tweet`, `Follow`, `Like`, `Notification`, `DirectMessage`, `Report`, `AuditLog` と、Safe Zone分類ロジックを持ちます。 |
+| `services.py` | ルート間で共有する補助処理です。CSRF、レート制限、監査ログ、通知作成、画像保存、Base64画像保存、有害コンテンツ検知、メールログ出力、トークン生成を担当します。 |
 
-### 2. Configure environment variables
+### Flask Routes
 
-Create a `.env` file:
+| File | Role |
+|---|---|
+| `routes/auth_routes.py` | 登録、ログイン、ログアウト、メール認証、パスワードリセット、多段階本人確認登録、JWT発行を担当します。 |
+| `routes/main_routes.py` | Flask/Jinja版のSNS画面用ルートです。ホーム、投稿、プロフィール、フォロー、いいね、返信、通報、通知、DM、発見ページを担当します。 |
+| `routes/api_routes.py` | React + TypeScript frontend が使うJSON APIとJWT保護APIを担当します。`/api/me`, `/api/timeline`, 投稿作成、いいね、返信、通知、DMなどがあります。 |
+| `routes/verification_routes.py` | ログイン済みユーザーが後から本人確認を行うためのルートです。身分証アップロード、顔写真撮影、確認ステータス取得を担当します。 |
+| `routes/admin_routes.py` | 管理者用ルートです。本人確認の承認/拒否、モデレーションキュー、通報確認、監査ログ閲覧を担当します。 |
+
+### Flask Templates
+
+| Path | Role |
+|---|---|
+| `templates/base.html` | Jinja版ページの共通レイアウトです。上部ナビゲーション、ログイン状態表示、共通CSS読み込み、フラッシュメッセージを提供します。 |
+| `templates/index.html` | Jinja版ホームタイムラインです。投稿フォーム、タイムライン、左ナビ、右サイドバーを表示します。 |
+| `templates/profile.html` | Jinja版プロフィール画面です。Safe Zone、自己紹介、フォロー状態、投稿一覧、プロフィール編集フォームを表示します。 |
+| `templates/discover.html` | Safe Zone別の発見ページです。選択された世代ゾーンの投稿を表示します。 |
+| `templates/messages.html` | Jinja版DM画面です。メッセージ送信フォームと送受信履歴を表示します。 |
+| `templates/notifications.html` | Jinja版通知画面です。いいね、返信、フォロー、DM通知を表示します。 |
+| `templates/auth/` | 登録、ログイン、メール/パスワード関連、登録時の身分証/顔写真アップロード画面を置きます。 |
+| `templates/admin/` | 管理者向けの本人確認、モデレーション、監査ログ画面を置きます。 |
+| `templates/verification/` | ログイン済みユーザー向けの後続本人確認画面を置きます。 |
+| `templates/vertification/` | 旧typo名の本人確認テンプレートです。互換用に残っていますが、新規利用は `templates/verification/` を使います。 |
+
+### Static Assets
+
+| Path | Role |
+|---|---|
+| `static/css/era.css` | Flask/Jinja版UIのスタイルです。スクリーンショット風の暗色レイアウト、サイドバー、投稿カード、認証画面などを定義します。 |
+| `static/img/Eraicon.png` | Eraロゴ画像です。FlaskテンプレートとReact frontendの両方から参照します。 |
+| `static/uploads/` | 開発用のアップロード保存先です。`.gitignore` 対象で、本番ではオブジェクトストレージへの置き換えを想定しています。 |
+
+### React + TypeScript Frontend
+
+| File | Role |
+|---|---|
+| `frontend/package.json` | React/Vite/TypeScript/lucide-reactなどの依存関係と、`dev`, `build`, `preview`, `lint` scriptsを定義します。 |
+| `frontend/index.html` | ViteのHTMLエントリです。`src/main.tsx` を読み込み、Reactアプリを `#root` にマウントします。 |
+| `frontend/vite.config.ts` | Vite設定です。開発時に `/api`, `/auth`, `/static` をFlask backendへproxyします。`VITE_API_PROXY_TARGET` で向き先を変更できます。 |
+| `frontend/tsconfig.json` | frontend TypeScriptの型チェック設定です。strict modeを有効にしています。 |
+| `frontend/tsconfig.node.json` | Vite設定ファイルなどNode側TypeScript用の設定です。 |
+| `frontend/eslint.config.js` | ESLint flat configです。TypeScriptとReact Hooksの基本ルールを適用します。 |
+| `frontend/src/main.tsx` | Reactアプリのエントリです。`App` をDOMにマウントし、共通CSSを読み込みます。 |
+| `frontend/src/App.tsx` | React frontendの中心です。ログイン、ホーム、発見、通知、DM、投稿、いいね、返信、左右サイドバーをコンポーネントとして実装します。 |
+| `frontend/src/api.ts` | Flask JSON APIを呼び出すTypeScript clientです。JWTを `localStorage` に保存し、認証付きリクエストを送ります。 |
+| `frontend/src/types.ts` | APIレスポンスの型定義です。`EraUser`, `Tweet`, `TimelineResponse`, `NotificationItem`, `DirectMessage` などを定義します。 |
+| `frontend/src/styles.css` | React frontend用のUIスタイルです。Jinja版とは独立して、同じEraデザインをSPA用に定義しています。 |
+
+### Database, Tests, and Operations
+
+| Path | Role |
+|---|---|
+| `migrations/` | Flask-Migrate/Alembicのマイグレーション管理ディレクトリです。DBスキーマ変更を追跡します。 |
+| `migrations/versions/0001_initial_schema.py` | 初期スキーマのマイグレーションです。ユーザー、投稿、いいね、通知、DM、通報、監査ログなどのテーブルを作成します。 |
+| `tests/test_app.py` | pytestの最小スモークテストです。Safe Zone分類、アプリ生成、ログイン画面ロードを確認します。 |
+| `.github/workflows/ci.yml` | GitHub Actions CI設定です。push/PR時に依存をインストールしてpytestを実行します。 |
+| `requirements.txt` | Python依存関係です。Flask、SQLAlchemy、JWT、Migrate、Gunicorn、OpenAI、pytestなどを定義します。 |
+| `Dockerfile` | Flask backend用のPythonコンテナ定義です。Compose側でコマンドを上書きして使います。 |
+| `docker-compose.yml` | PostgreSQL、Flask backend、React frontendをまとめて起動する開発用Compose設定です。 |
+| `.env` | ローカル開発用の環境変数例です。`OPENAI_API_KEY=` は空のままにしてあり、キー取得後に追加します。 |
+| `.gitignore` | Pythonキャッシュ、pytestキャッシュ、アップロード画像、frontend build成果物、node_modulesなどを除外します。 |
+| `README.md` | このドキュメントです。セットアップ、構成、API、セキュリティ注意点、ファイル役割を説明します。 |
+
+## Environment Variables
+
+`.env` example:
 
 ```env
 DATABASE_URL=postgresql://user:password@db:5432/sns_db
 SECRET_KEY=replace_with_a_random_secret
 JWT_SECRET_KEY=replace_with_another_random_secret
+OPENAI_API_KEY=
+OPENAI_MODERATION_MODEL=omni-moderation-latest
+STORAGE_BACKEND=local
+UPLOAD_FOLDER=static/uploads
+APP_BASE_URL=http://localhost:5001
 ```
 
-### 3. Install missing image-processing dependencies
+`OPENAI_API_KEY` is intentionally blank. Add your key later to enable OpenAI Moderation API calls. Without a key, Era uses the local rule-based moderation fallback.
 
-The current source imports the following packages, but they may not yet be included in `requirements.txt`:
-
-```text
-face_recognition
-numpy
-opencv-python
-```
-
-Add them before running the identity-verification feature. Depending on the OS, `face_recognition` may also require CMake, dlib, and system build tools.
-
-### 4. Start the application
+## Quick Start with Docker
 
 ```bash
 docker compose up --build
 ```
 
-The current Compose configuration maps the Flask application to:
+Open the React + TypeScript frontend:
+
+```text
+http://localhost:5173
+```
+
+The Flask backend is also exposed at:
 
 ```text
 http://localhost:5001
 ```
 
-## Local Development / ローカル実行
+Default admin account:
 
-A local PostgreSQL instance is required.
+```text
+username: admin
+password: admin_password
+```
+
+Change or remove the default admin creation before production use.
+
+## Local Development
+
+### Backend
+
+For PostgreSQL:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-pip install face_recognition numpy opencv-python
 export DATABASE_URL="postgresql://user:password@localhost:5432/sns_db"
 export SECRET_KEY="replace_with_a_random_secret"
 export JWT_SECRET_KEY="replace_with_another_random_secret"
+export OPENAI_API_KEY=""
 flask --app app init-db
-python app.py
+flask --app app run --port 5002
 ```
 
-Windows PowerShell:
-
-```powershell
-$env:DATABASE_URL="postgresql://user:password@localhost:5432/sns_db"
-$env:SECRET_KEY="replace_with_a_random_secret"
-$env:JWT_SECRET_KEY="replace_with_another_random_secret"
-```
-
-## API Examples / API使用例
-
-### Register a user
+For quick local SQLite testing:
 
 ```bash
-curl -X POST http://localhost:5001/auth/register   -H "Content-Type: application/json"   -d '{
+export DATABASE_URL="sqlite:////tmp/era_sns_dev.db"
+export SECRET_KEY="dev"
+export JWT_SECRET_KEY="dev"
+export OPENAI_API_KEY=""
+flask --app app run --port 5002
+```
+
+Open:
+
+```text
+http://127.0.0.1:5002
+```
+
+### Frontend
+
+The frontend lives in `frontend/` and uses React + TypeScript + Vite.
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open:
+
+```text
+http://localhost:5173
+```
+
+By default, Vite proxies API requests to:
+
+```text
+http://127.0.0.1:5002
+```
+
+To point the frontend at another backend:
+
+```bash
+VITE_API_PROXY_TARGET=http://127.0.0.1:5001 npm run dev
+```
+
+Build the frontend:
+
+```bash
+cd frontend
+npm run build
+```
+
+Note: this machine must have Node.js and npm installed to run the Vite frontend locally. Docker Compose can run the frontend with the `node:20-alpine` image.
+
+## Database Migration
+
+Alembic is initialized under `migrations/`.
+
+```bash
+flask --app app db upgrade
+```
+
+To create a new migration after model changes:
+
+```bash
+flask --app app db migrate -m "describe change"
+flask --app app db upgrade
+```
+
+## Tests and CI
+
+Run tests locally:
+
+```bash
+python -m pytest -q
+```
+
+GitHub Actions runs the same pytest suite on push and pull request.
+
+## API Examples
+
+### Register
+
+```bash
+curl -X POST http://localhost:5001/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
     "username": "example_user",
-    "user_age": 22,
+    "birth_date": "2002-04-10",
+    "user_age": 24,
     "email": "user@example.com",
     "password": "replace_with_a_secure_password"
   }'
 ```
 
-### Obtain a JWT token
+### Login and Get JWT
 
 ```bash
-curl -X POST http://localhost:5001/auth/login   -H "Content-Type: application/json"   -d '{
+curl -X POST http://localhost:5001/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
     "username": "example_user",
     "password": "replace_with_a_secure_password"
   }'
 ```
 
-### Create a post
+### Create Post
 
 ```bash
-curl -X POST http://localhost:5001/api/tweets   -H "Content-Type: application/json"   -H "Authorization: Bearer YOUR_ACCESS_TOKEN"   -d '{"body":"Hello, Era!"}'
+curl -X POST http://localhost:5001/api/tweets \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \
+  -d '{"body":"Hello, Era!"}'
 ```
 
-### Get a user profile
+### Public Profile API
 
 ```bash
 curl http://localhost:5001/api/users/example_user
 ```
 
-## Security Notice / セキュリティ上の注意
+The public profile API returns `age_zone`, not exact age or email.
 
-This repository is a research and product-design prototype, not a production-ready identity-verification service.
+### React Frontend API
 
-- ソースコード中のデフォルト秘密鍵・管理者パスワードは開発用です。
-- 本番環境では、秘密鍵や認証情報を環境変数またはSecret Managerで管理してください。
-- デフォルト管理者アカウントを自動作成する処理は、本番利用前に削除または変更してください。
-- 身分証明書・顔画像は極めて機微な個人情報です。暗号化、保存期間、アクセス制御、削除手順、同意取得が必要です。
-- 現在の顔照合はプロトタイプであり、本人確認サービスとしての精度・公平性・なりすまし耐性は保証していません。
-- CSRF対策、レート制限、監査ログ、メール確認、パスワードポリシーなどの追加対策が必要です。
-- アップロードファイルのMIME検査やマルウェア検査も追加してください。
+The TypeScript frontend currently uses these JWT-backed endpoints:
 
-## Current Limitations / 現在の制限
+- `GET /api/me`
+- `GET /api/timeline`
+- `POST /api/tweets`
+- `POST /api/tweets/<id>/like`
+- `POST /api/tweets/<id>/replies`
+- `GET /api/notifications`
+- `GET /api/messages`
+- `POST /api/messages`
 
-- 年齢層別Safe Zoneへの自動振り分けは未実装
-- 世代別タイムラインおよび推薦モデルは未実装
-- 投稿への画像添付、いいね、返信、DMは未実装
-- 自動テストとCIが未整備
-- `requirements.txt`に画像処理依存関係が不足
-- 本人確認フローは実験用プロトタイプ
-- UIは機能検証を中心とした初期版
+## Security Notes
 
-## Roadmap / 今後の拡張
+This repository is still a prototype, not a production-ready identity-verification service.
 
-- 年齢層を抽象化したSafe Zone設計
-- 生年月日・本人確認結果に基づく年齢検証
-- 世代別タイムラインと推薦アルゴリズム
-- 年齢情報を直接公開しないプライバシー設計
-- いいね、返信、通知、DM
-- 投稿のモデレーションと通報機能
-- 有害コンテンツ検知
-- メール認証とパスワードリセット
-- CSRF対策、レート制限、監査ログ
-- オブジェクトストレージへの安全な画像保存
-- pytest、GitHub Actions、マイグレーション
-- 本番向けWSGIサーバーとクラウドデプロイ
+- Replace `SECRET_KEY`, `JWT_SECRET_KEY`, and the default admin password before deployment.
+- Store secrets in environment variables or a secret manager.
+- ID-card and face images are sensitive personal data. Use encryption, strict access control, retention limits, and consent flows in production.
+- The local image backend is suitable for development only. Use S3-compatible object storage or another managed storage service for production.
+- `face_recognition` is optional in this repo. If it is not installed, development fallback accepts face capture so the flow can be tested.
+- Add MIME sniffing, malware scanning, and more robust abuse prevention before public release.
+- Email sending currently logs messages in development; connect a real mail provider for production.
+
+## Remaining Production Work
+
+- Connect real object storage and signed upload/download URLs.
+- Replace console email with SMTP or transactional email.
+- Harden rate limiting with Redis or another shared backend.
+- Use a managed identity verification provider if legal assurance is required.
+- Add richer recommendation logic and moderation review tooling.
+- Deploy to a cloud platform with managed PostgreSQL, HTTPS, and observability.

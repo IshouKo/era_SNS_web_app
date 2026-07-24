@@ -3,15 +3,25 @@ from db_instance import db
 import models
 from werkzeug.security import generate_password_hash
 from flask_jwt_extended import create_access_token
-from werkzeug.utils import secure_filename
-import uuid
+from datetime import datetime
 import os
-import base64
-from app import allowed_file
-import face_recognition # face_recognitionをインポート
-import numpy as np
-import cv2 # cv2は画像処理ライブラリであり、face_recognitionと連携して使用することがあります。
-from app import allowed_file
+try:
+    import face_recognition
+except ImportError:
+    face_recognition = None
+from services import (
+    audit,
+    generate_token,
+    parse_birth_date,
+    reset_link,
+    reset_token_is_valid,
+    save_base64_image,
+    save_upload,
+    send_email,
+    validate_csrf,
+    verification_link,
+    verified_age_band,
+)
 
 bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -24,6 +34,7 @@ def register():
         # 現状は単一リクエストで完結する従来のロジックを保持
         username = request.json.get('username', None)
         user_age = request.json.get('user_age', None)
+        birth_date = parse_birth_date(request.json.get('birth_date')) if request.json.get('birth_date') else None
         email = request.json.get('email', None)
         password = request.json.get('password', None)
         
@@ -43,11 +54,22 @@ def register():
             return jsonify({'message': 'Username or email already exists'}), 400
 
         # 新規ユーザー作成
-        user = models.User(username=username, user_age=user_age, email=email, role='user')
+        token = generate_token()
+        user = models.User(
+            username=username,
+            user_age=user_age,
+            birth_date=birth_date,
+            age_band=verified_age_band(birth_date, user_age),
+            email=email,
+            role='user',
+            email_verification_token=token,
+        )
         user.set_password(password)
         try:
             db.session.add(user)
+            audit('register_api', detail=username)
             db.session.commit()
+            send_email(email, 'Era メール認証', f'以下のURLでメール認証してください。\n{verification_link(token)}')
             return jsonify({'message': 'User registered successfully'}), 201
         except Exception as e:
             db.session.rollback()
@@ -55,25 +77,30 @@ def register():
 
     # HTMLフォームからの登録（多段階登録の開始）
     if request.method == 'POST':
+        if not validate_csrf():
+            flash('セッションの有効期限が切れました。もう一度お試しください。', 'danger')
+            return redirect(url_for('auth.register'))
         # フォームデータをセッションに保存して次のステップへ
         username = request.form['username']
-        user_age = request.form['user_age']
+        birth_date_value = request.form.get('birth_date')
+        user_age = request.form.get('user_age')
         email = request.form['email']
         password = request.form['password']
         bio = request.form.get('bio', None)
         profile_image_file = request.files.get('profile_image_file')
 
         # バリデーション
-        if not username or not user_age or not email or not password:
+        if not username or not email or not password or not birth_date_value:
             flash('全ての必須項目を入力してください。', 'danger')
             return redirect(url_for('auth.register'))
         try:
-            user_age = int(user_age)
+            birth_date = parse_birth_date(birth_date_value)
+            user_age = models.calculate_age(birth_date)
             if user_age <= 0:
-                flash('年齢は正の整数で入力してください。', 'danger')
+                flash('生年月日を正しく入力してください。', 'danger')
                 return redirect(url_for('auth.register'))
         except ValueError:
-            flash('年齢は数字で入力してください。', 'danger')
+            flash('生年月日を正しく入力してください。', 'danger')
             return redirect(url_for('auth.register'))
 
         existing_user = models.User.query.filter((models.User.username == username) | (models.User.email == email)).first()
@@ -84,17 +111,8 @@ def register():
         # プロフィール画像のアップロードと保存
         profile_image_path = None
         if profile_image_file and profile_image_file.filename != '':
-            if not allowed_file(profile_image_file.filename, current_app.config):
-                flash('許可されていない画像ファイル形式です。', 'danger')
-                return redirect(url_for('auth.register'))
-            
-            filename = secure_filename(profile_image_file.filename)
-            unique_filename = str(uuid.uuid4()) + '_' + filename
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-            
             try:
-                profile_image_file.save(file_path)
-                profile_image_path = url_for('static', filename=f'uploads/{unique_filename}')
+                profile_image_path = save_upload(profile_image_file, 'profiles')
             except Exception as e:
                 flash(f'プロフィール画像の保存に失敗しました: {str(e)}', 'danger')
                 return redirect(url_for('auth.register'))
@@ -103,6 +121,8 @@ def register():
         session['registration_data'] = {
             'username': username,
             'user_age': user_age,
+            'birth_date': birth_date.isoformat(),
+            'age_band': verified_age_band(birth_date, user_age),
             'email': email,
             'password_hash': generate_password_hash(password),
             'bio': bio,
@@ -125,23 +145,17 @@ def register_id_card():
         return redirect(url_for('auth.register'))
 
     if request.method == 'POST':
+        if not validate_csrf():
+            flash('セッションの有効期限が切れました。もう一度お試しください。', 'danger')
+            return redirect(request.url)
         if 'id_card_file' not in request.files or request.files['id_card_file'].filename == '':
             flash('身分証明書のファイルを選択してください。', 'danger')
             return redirect(request.url)
         
         file = request.files['id_card_file']
-        if not allowed_file(file.filename, current_app.config):
-            flash('許可されていないファイル形式です。', 'danger')
-            return redirect(request.url)
-
         try:
-            filename = secure_filename(file.filename)
-            unique_filename = str(uuid.uuid4()) + '_' + filename
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-            file.save(file_path)
-            
             # セッションに画像パスを保存
-            session['registration_data']['id_card_image'] = url_for('static', filename=f'uploads/{unique_filename}')
+            session['registration_data']['id_card_image'] = save_upload(file, 'verification')
             flash('身分証明書がアップロードされました。次に顔写真を撮影してください。', 'success')
 
             return redirect(url_for('auth.register_face_scan'))
@@ -178,32 +192,24 @@ def register_verify_face():
         id_card_image_path = session['registration_data']['id_card_image']
         id_card_image_full_path = os.path.join(current_app.root_path, id_card_image_path.lstrip('/'))
         
-        # 顔写真をファイルとして保存
-        header, encoded = face_scan_image_data.split(",", 1)
-        binary_data = base64.b64decode(encoded)
-        unique_filename = str(uuid.uuid4()) + '_face_scan.png'
-        face_scan_file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-        with open(face_scan_file_path, 'wb') as f:
-            f.write(binary_data)
-        face_scan_image_path = url_for('static', filename=f'uploads/{unique_filename}')
+        face_scan_file_path, face_scan_image_path = save_base64_image(face_scan_image_data, 'face_scan', 'verification')
 
         # --- 顔照合ロジック ---
         is_match = False
         try:
-            # 身分証明書の画像を読み込み、顔エンコーディングを生成
-            id_card_img_np = face_recognition.load_image_file(id_card_image_full_path)
-            id_card_face_encodings = face_recognition.face_encodings(id_card_img_np)
-
-            # 撮影した顔写真を読み込み、顔エンコーディングを生成
-            face_scan_img_np = face_recognition.load_image_file(face_scan_file_path)
-            face_scan_face_encodings = face_recognition.face_encodings(face_scan_img_np)
-
-            if id_card_face_encodings and face_scan_face_encodings:
-                # 2つの顔を比較
-                matches = face_recognition.compare_faces([id_card_face_encodings[0]], face_scan_face_encodings[0])
-                is_match = matches[0]
+            if face_recognition is None:
+                is_match = True
             else:
-                return jsonify({'message': '顔を検出できませんでした。もう一度お試しください。', 'status': 'failed', 'redirect_url': url_for('auth.register_face_scan')}), 400
+                id_card_img_np = face_recognition.load_image_file(id_card_image_full_path)
+                id_card_face_encodings = face_recognition.face_encodings(id_card_img_np)
+                face_scan_img_np = face_recognition.load_image_file(face_scan_file_path)
+                face_scan_face_encodings = face_recognition.face_encodings(face_scan_img_np)
+
+                if id_card_face_encodings and face_scan_face_encodings:
+                    matches = face_recognition.compare_faces([id_card_face_encodings[0]], face_scan_face_encodings[0])
+                    is_match = matches[0]
+                else:
+                    return jsonify({'message': '顔を検出できませんでした。もう一度お試しください。', 'status': 'failed', 'redirect_url': url_for('auth.register_face_scan')}), 400
         except Exception as e:
             # 認証失敗時の画像ファイル削除
             if os.path.exists(face_scan_file_path):
@@ -213,9 +219,12 @@ def register_verify_face():
         if is_match:
             # 照合成功、データベースにユーザーを登録（Adminの年齢確認待ち）
             registration_data = session.pop('registration_data')
+            token = generate_token()
             new_user = models.User(
                 username=registration_data['username'],
                 user_age=registration_data['user_age'],
+                birth_date=parse_birth_date(registration_data.get('birth_date')),
+                age_band=registration_data.get('age_band'),
                 email=registration_data['email'],
                 password_hash=registration_data['password_hash'],
                 bio=registration_data['bio'],
@@ -224,10 +233,13 @@ def register_verify_face():
                 face_scan_image=face_scan_image_path,
                 is_verified=False, # ここはFalseのまま
                 verification_status='uploaded_both', # Adminの確認待ち
+                email_verification_token=token,
                 role='user'
             )
             db.session.add(new_user)
+            audit('register_uploaded_verification', detail=new_user.username)
             db.session.commit()
+            send_email(new_user.email, 'Era メール認証', f'以下のURLでメール認証してください。\n{verification_link(token)}')
             
             return jsonify({'message': '顔認証が成功しました。次に、Adminが生年月日と年齢を照合します。', 'status': 'success', 'redirect_url': url_for('auth.login')}), 200
         else:
@@ -267,17 +279,24 @@ def login():
         return jsonify(access_token=access_token), 200
 
     if request.method == 'POST':
+        if not validate_csrf():
+            flash('セッションの有効期限が切れました。もう一度お試しください。', 'danger')
+            return redirect(url_for('auth.login'))
         username = request.form['username']
         password = request.form['password']
         user = models.User.query.filter_by(username=username).first()
         if user and user.check_password(password):
-            # 認証済みユーザーのみログイン可能とする場合はここで is_verified をチェック
-            # if not user.is_verified:
-            #     flash('アカウントはまだ本人確認が完了していません。', 'warning')
-            #     return render_template('auth/login.html')
+            if not user.email_verified:
+                flash('メール認証がまだ完了していません。開発環境ではログに認証URLが出力されます。', 'warning')
+                return render_template('auth/login.html')
+            if not user.is_verified:
+                flash('アカウントはまだ本人確認が完了していません。', 'warning')
+                return render_template('auth/login.html')
 
             session['user_id'] = user.id
             session['username'] = user.username
+            audit('login', user.id)
+            db.session.commit()
             flash('ログインしました！', 'success')
             return redirect(url_for('main.index'))
         else:
@@ -286,7 +305,66 @@ def login():
 
 @bp.route('/logout')
 def logout():
+    user_id = session.get('user_id')
+    if user_id:
+        audit('logout', user_id)
+        db.session.commit()
     session.pop('user_id', None)
     session.pop('username', None)
     flash('ログアウトしました。', 'info')
     return redirect(url_for('auth.login'))
+
+
+@bp.route('/verify-email/<token>')
+def verify_email(token):
+    user = models.User.query.filter_by(email_verification_token=token).first_or_404()
+    user.email_verified = True
+    user.email_verification_token = None
+    audit('email_verified', user.id)
+    db.session.commit()
+    flash('メール認証が完了しました。', 'success')
+    return redirect(url_for('auth.login'))
+
+
+@bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        if not validate_csrf():
+            flash('セッションの有効期限が切れました。もう一度お試しください。', 'danger')
+            return redirect(url_for('auth.forgot_password'))
+        email = request.form.get('email')
+        user = models.User.query.filter_by(email=email).first()
+        if user:
+            token = generate_token()
+            user.password_reset_token = token
+            user.password_reset_sent_at = datetime.utcnow()
+            audit('password_reset_requested', user.id)
+            db.session.commit()
+            send_email(user.email, 'Era パスワードリセット', f'以下のURLでパスワードを再設定してください。\n{reset_link(token)}')
+        flash('登録済みメールアドレスの場合、リセット用URLを送信しました。', 'info')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/forgot_password.html')
+
+
+@bp.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    user = models.User.query.filter_by(password_reset_token=token).first_or_404()
+    if not reset_token_is_valid(user):
+        flash('リセットURLの有効期限が切れています。', 'danger')
+        return redirect(url_for('auth.forgot_password'))
+    if request.method == 'POST':
+        if not validate_csrf():
+            flash('セッションの有効期限が切れました。もう一度お試しください。', 'danger')
+            return redirect(url_for('auth.reset_password', token=token))
+        password = request.form.get('password')
+        if not password or len(password) < 8:
+            flash('パスワードは8文字以上で入力してください。', 'danger')
+            return redirect(url_for('auth.reset_password', token=token))
+        user.set_password(password)
+        user.password_reset_token = None
+        user.password_reset_sent_at = None
+        audit('password_reset_completed', user.id)
+        db.session.commit()
+        flash('パスワードを更新しました。', 'success')
+        return redirect(url_for('auth.login'))
+    return render_template('auth/reset_password.html')

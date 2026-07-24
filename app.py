@@ -1,14 +1,15 @@
 from flask import Flask
-from flask_sqlalchemy import SQLAlchemy
 import os
 import click
 from db_instance import db
 from flask_jwt_extended import JWTManager
 from werkzeug.security import generate_password_hash
-import uuid
+from flask_migrate import Migrate
+from services import csrf_token, rate_limited
 
 # JWTManagerのインスタンスをグローバルに作成
 jwt = JWTManager()
+migrate = Migrate()
 
 def register_cli_commands(app):
     @app.cli.command('init-db')
@@ -25,14 +26,28 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object('config.Config')
 
-    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', 'static/uploads')
-    app.config['UPLOAD_FOLDER'] = os.path.join(app.root_path, UPLOAD_FOLDER)
+    upload_folder = app.config['UPLOAD_FOLDER']
+    if not os.path.isabs(upload_folder):
+        upload_folder = os.path.join(app.root_path, upload_folder)
+    app.config['UPLOAD_FOLDER'] = upload_folder
     app.config['ALLOWED_EXTENSIONS'] = {'png', 'jpg', 'jpeg', 'gif'}
     app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
     os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
     db.init_app(app)
     jwt.init_app(app)
+    migrate.init_app(app, db)
+    app.jinja_env.globals['csrf_token'] = csrf_token
+
+    @app.before_request
+    def apply_basic_rate_limit():
+        from flask import request, abort
+        if request.endpoint == 'static':
+            return None
+        key = f"{request.remote_addr}:{request.endpoint}"
+        if rate_limited(key):
+            abort(429)
+        return None
 
     # Blueprintの登録
     from routes import auth_routes, main_routes, api_routes, verification_routes, admin_routes # admin_routesを追加
@@ -56,8 +71,10 @@ def create_app():
                 username='admin',
                 email='admin@example.com',
                 user_age=99,
+                age_band='シニアゾーン',
                 password_hash=generate_password_hash('admin_password'), # 強固なパスワードを設定してください
                 role='admin',
+                email_verified=True,
                 is_verified=True,
                 verification_status='approved'
             )

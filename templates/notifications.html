@@ -1,0 +1,19 @@
+{% extends 'base.html' %}
+{% block title %}通知 - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>通知</h1>
+  {% for item in notifications %}
+    <div class="notification-row">
+      <div class="mini-avatar"></div>
+      <div>
+        <strong>{{ item.kind }}</strong>
+        <p class="muted">{{ item.message }}</p>
+      </div>
+      <span class="post-time">{{ item.created_at.strftime('%m/%d %H:%M') }}</span>
+    </div>
+  {% else %}
+    <p class="muted">通知はまだありません。</p>
+  {% endfor %}
+</section>
+{% endblock %}

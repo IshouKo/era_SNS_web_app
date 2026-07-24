@@ -20,6 +20,7 @@
             <p class="lead text-center">本人確認のために、有効な身分証明書の画像をアップロードしてください。</p>
             <p class="text-muted text-center">これは登録手続きの一部です。</p>
             <form action="{{ url_for('auth.register_id_card') }}" method="post" enctype="multipart/form-data" class="mt-4">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="mb-3">
                     <label for="id_card_file" class="form-label">ファイルを選択</label>
                     <input type="file" class="form-control" id="id_card_file" name="id_card_file" required accept="image/png, image/jpeg, image/gif">

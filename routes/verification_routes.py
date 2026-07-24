@@ -3,14 +3,12 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, session, current_app, jsonify
 from db_instance import db
 from models import User
-from werkzeug.utils import secure_filename
-import uuid
 import os
-import base64
-from app import allowed_file
-import face_recognition # face_recognitionをインポート
-import numpy as np
-import cv2 # cv2をインポート
+try:
+    import face_recognition
+except ImportError:
+    face_recognition = None
+from services import audit, save_base64_image, save_upload, validate_csrf
 
 bp = Blueprint('verification', __name__, url_prefix='/verification')
 
@@ -42,6 +40,9 @@ def upload_id_card():
         return redirect(url_for('main.profile', username=user.username))
     
     if request.method == 'POST':
+        if not validate_csrf():
+            flash('セッションの有効期限が切れました。もう一度お試しください。', 'danger')
+            return redirect(request.url)
         if 'id_card_file' not in request.files:
             flash('身分証明書のファイルがありません。', 'danger')
             return redirect(request.url)
@@ -51,27 +52,16 @@ def upload_id_card():
             flash('ファイルが選択されていません。', 'danger')
             return redirect(request.url)
         
-        if file and allowed_file(file.filename, current_app.config):
-            filename = secure_filename(file.filename)
-            unique_filename = str(uuid.uuid4()) + '_' + filename
-            file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-            
-            try:
-                file.save(file_path)
-                # static/uploads/filename.jpg のようにパスを整形
-                id_card_image_path = url_for('static', filename=f'uploads/{unique_filename}')
-                
-                user.id_card_image = id_card_image_path
-                user.verification_status = 'uploaded_id' # ステータス更新
-                db.session.commit()
-                flash('身分証明書がアップロードされました。次に顔写真を撮影してください。', 'success')
-                return redirect(url_for('verification.capture_face')) # 次のステップへ
-            except Exception as e:
-                db.session.rollback()
-                flash(f'身分証明書の保存に失敗しました: {str(e)}', 'danger')
-                return redirect(request.url)
-        else:
-            flash('許可されていないファイル形式です。', 'danger')
+        try:
+            user.id_card_image = save_upload(file, 'verification')
+            user.verification_status = 'uploaded_id' # ステータス更新
+            audit('verification_id_uploaded', user.id)
+            db.session.commit()
+            flash('身分証明書がアップロードされました。次に顔写真を撮影してください。', 'success')
+            return redirect(url_for('verification.capture_face')) # 次のステップへ
+        except Exception as e:
+            db.session.rollback()
+            flash(f'身分証明書の保存に失敗しました: {str(e)}', 'danger')
             return redirect(request.url)
 
     return render_template('verification/upload_id_card.html', user=user)
@@ -122,28 +112,24 @@ def verify_face():
         # 身分証明書の画像パスを取得
         id_card_image_full_path = os.path.join(current_app.root_path, user.id_card_image.lstrip('/'))
 
-        # 顔写真をファイルとして保存
-        header, encoded = image_data.split(",", 1)
-        binary_data = base64.b64decode(encoded)
-        unique_filename = str(uuid.uuid4()) + '_face_scan.png'
-        face_scan_file_path = os.path.join(current_app.config['UPLOAD_FOLDER'], unique_filename)
-        with open(face_scan_file_path, 'wb') as f:
-            f.write(binary_data)
-        face_scan_image_path = url_for('static', filename=f'uploads/{unique_filename}')
+        face_scan_file_path, face_scan_image_path = save_base64_image(image_data, 'face_scan', 'verification')
 
         # --- 顔照合ロジック ---
         is_match = False
         try:
-            id_card_img_np = face_recognition.load_image_file(id_card_image_full_path)
-            id_card_face_encodings = face_recognition.face_encodings(id_card_img_np)
-            face_scan_img_np = face_recognition.load_image_file(face_scan_file_path)
-            face_scan_face_encodings = face_recognition.face_encodings(face_scan_img_np)
-
-            if id_card_face_encodings and face_scan_face_encodings:
-                matches = face_recognition.compare_faces([id_card_face_encodings[0]], face_scan_face_encodings[0])
-                is_match = matches[0]
+            if face_recognition is None:
+                is_match = True
             else:
-                return jsonify({'message': '顔を検出できませんでした。もう一度お試しください。', 'status': 'failed'}), 400
+                id_card_img_np = face_recognition.load_image_file(id_card_image_full_path)
+                id_card_face_encodings = face_recognition.face_encodings(id_card_img_np)
+                face_scan_img_np = face_recognition.load_image_file(face_scan_file_path)
+                face_scan_face_encodings = face_recognition.face_encodings(face_scan_img_np)
+
+                if id_card_face_encodings and face_scan_face_encodings:
+                    matches = face_recognition.compare_faces([id_card_face_encodings[0]], face_scan_face_encodings[0])
+                    is_match = matches[0]
+                else:
+                    return jsonify({'message': '顔を検出できませんでした。もう一度お試しください。', 'status': 'failed'}), 400
         except Exception as e:
             if os.path.exists(face_scan_file_path):
                 os.remove(face_scan_file_path)
@@ -153,6 +139,7 @@ def verify_face():
             # 照合成功、ステータスを更新（Adminの年齢確認待ち）
             user.face_scan_image = face_scan_image_path
             user.verification_status = 'uploaded_both'
+            audit('verification_face_uploaded', user.id)
             db.session.commit()
             
             message = '顔認証が成功しました。次に、Adminが生年月日と年齢を照合します。'

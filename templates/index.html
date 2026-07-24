@@ -1,86 +1,160 @@
 <!doctype html>
 <html lang="ja">
 <head>
-    <meta charset="utf-8">
-    <title>ホーム - Era</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; background-color: #f0f2f5; }
-        .header { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background-color: #fff; border-bottom: 1px solid #ddd; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px;}
-        .header h1 { margin: 0; font-size: 24px; color: #333; }
-        .nav a { margin-left: 20px; text-decoration: none; color: #007bff; font-weight: bold; }
-        .nav a:hover { text-decoration: underline; }
-        .container { max-width: 700px; margin: 0 auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .tweet-form textarea { width: calc(100% - 22px); padding: 10px; margin-bottom: 10px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; min-height: 80px; }
-        .tweet-form button { padding: 10px 20px; background-color: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; float: right; }
-        .tweet-form button:hover { background-color: #218838; }
-        .clear { clear: both; }
-        .tweet-list { margin-top: 20px; }
-        .tweet-item { border: 1px solid #eee; padding: 15px; margin-bottom: 15px; border-radius: 8px; background-color: #fff; }
-        .tweet-item .author { font-weight: bold; color: #007bff; text-decoration: none; }
-        .tweet-item .timestamp { font-size: 0.8em; color: #666; margin-left: 10px; }
-        .tweet-item .body { margin-top: 5px; line-height: 1.6; }
-        .flash { padding: 10px; margin-bottom: 10px; border-radius: 4px; }
-        .flash.success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .flash.danger { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .flash.info { background-color: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
-        .tweet-item .user-info { /* ユーザー名と年齢を囲むコンテナ */
-            display: inline-flex; /* インラインフレックスで並べる */
-            align-items: center; /* 垂直方向中央揃え */
-        }
-        .tweet-item .user-age { /* 年齢のスタイル */
-            font-size: 0.8em; /* タイムスタンプと同じくらいのサイズ */
-            margin-left: 5px; /* ユーザー名との間に少しスペース */
-        }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Era</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/era.css') }}">
 </head>
 <body>
-    <div class="header">
-        <h1>Era</h1>
-        <div class="nav">
-            <span>ようこそ、<a href="{{ url_for('main.profile', username=user.username) }}">{{ user.username }}</a> さん！</span>
-            <a href="{{ url_for('auth.logout') }}">ログアウト</a>
-        </div>
-    </div>
-    <div class="container">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
+  {% set avatar = user.profile_image or 'https://api.dicebear.com/9.x/avataaars/svg?seed=' ~ user.username %}
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('main.index') }}">
+      <img src="{{ url_for('static', filename='img/Eraicon.png') }}" alt="">
+      Era
+    </a>
+    <input class="search" type="search" placeholder="興味のある内容を検索">
+    <nav class="top-actions">
+      <a class="icon-button" href="{{ url_for('main.index') }}" title="作成">□</a>
+      <a class="icon-button" href="{{ url_for('main.messages') }}" title="メッセージ">✉</a>
+      <a class="icon-button" href="{{ url_for('main.notifications') }}" title="通知">🔔{% if unread_count %}<span>{{ unread_count }}</span>{% endif %}</a>
+      <a href="{{ url_for('main.profile', username=user.username) }}"><img class="avatar" src="{{ avatar }}" alt="{{ user.username }}"></a>
+      <strong>{{ user.username }}</strong>
+      <a class="muted" href="{{ url_for('auth.logout') }}">ログアウト</a>
+    </nav>
+  </header>
 
-        <h2>新しいツイート</h2>
-        <form class="tweet-form" action="{{ url_for('main.post_tweet') }}" method="POST">
-            <textarea name="body" placeholder="今どうしてる？ (280文字まで)" maxlength="280"></textarea>
-            <button type="submit">ツイート</button>
-            <div class="clear"></div>
-        </form>
+  <section class="hero-banner" aria-label="Era banner"></section>
 
-        <h2>タイムライン</h2>
-        <div class="tweet-list">
-            {% if tweets %}
-                {% for tweet in tweets %}
-                    <div class="tweet-item">
-                        <div class="user-info">
-                            {% if tweet.author.profile_image %}
-                                <img src="{{ tweet.author.profile_image }}" alt="プロフィール画像" class="profile-image" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px;">
-                            {% else %}
-                                <img src="https://via.placeholder.com/50/CCCCCC/FFFFFF?text=No+Image" alt="プロフィール画像" class="profile-image" style="width: 50px; height: 50px; border-radius: 50%; margin-right: 10px;">
-                            {% endif %}
-                            <a href="{{ url_for('main.profile', username=tweet.author.username) }}" class="author">{{ tweet.author.username }}</a>
-                            {% if tweet.author.user_age is not none %} {# user_ageが存在する場合のみ表示 #}
-                                <span class="user-age">({{ tweet.author.user_age }}歳)</span>
-                            {% endif %}
-                        </div>
-                        <span class="timestamp">{{ tweet.timestamp.strftime('%Y/%m/%d %H:%M') }}</span>
-                        <p class="body">{{ tweet.body }}</p>
-                    </div>
-                {% endfor %}
-            {% else %}
-                <p>まだツイートがありません。誰かをフォローするか、最初のツイートを投稿してみましょう！</p>
-            {% endif %}
-        </div>
+  <section class="profile-strip">
+    <img class="avatar" src="{{ avatar }}" alt="{{ user.username }}">
+    <div class="profile-copy">
+      <div class="profile-name">{{ user.username }} <span class="zone-pill">{{ user.public_age_zone }}</span></div>
+      <p class="profile-bio">{{ user.bio or '日常を記録し、好きなことをシェア' }}</p>
+      <div class="stats">
+        <span>フォロー {{ user.following.count() }}</span>
+        <span>フォロワー {{ user.followers.count() }}</span>
+      </div>
     </div>
+    <div class="profile-actions">
+      <a class="primary-button" href="{{ url_for('main.profile', username=user.username) }}">プロフィールを編集</a>
+    </div>
+  </section>
+
+  <div class="layout">
+    <aside class="left-rail">
+      <nav class="nav-list">
+        <a class="nav-item active" href="{{ url_for('main.index') }}">⌂ ホーム</a>
+        <a class="nav-item" href="{{ url_for('main.discover') }}">◎ 発見</a>
+        <a class="nav-item" href="{{ url_for('main.profile', username=user.username) }}">♙ フォロー中</a>
+        <a class="nav-item" href="{{ url_for('main.messages') }}">☏ メッセージ</a>
+        <a class="nav-item" href="{{ url_for('main.notifications') }}">☆ 通知</a>
+        {% if user.is_admin() %}
+          <a class="nav-item" href="{{ url_for('admin.moderation_queue') }}">⚑ 管理</a>
+        {% endif %}
+      </nav>
+      <section class="space-panel">
+        <span>あなたのスペース</span>
+        <h3>{{ user.public_age_zone }}</h3>
+        <div class="stats"><span>安全な世代別タイムライン</span></div>
+      </section>
+    </aside>
+
+    <main class="main-feed">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="flash {{ category }}">{{ message }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <form class="composer" action="{{ url_for('main.post_tweet') }}" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="composer-row">
+          <img class="avatar" src="{{ avatar }}" alt="">
+          <textarea name="body" placeholder="最近の出来事やアイデアをシェアしよう？" maxlength="280" required></textarea>
+        </div>
+        <div class="composer-actions">
+          <div class="composer-tools">
+            <label class="tool-label">画像 <input type="file" name="image_file" accept="image/*"></label>
+            <span class="tool-label">動画</span>
+            <span class="tool-label">絵文字</span>
+            <span class="tool-label">投票</span>
+            <input class="topic-input" name="topic" placeholder="# 話題">
+          </div>
+          <button class="primary-button" type="submit">投稿</button>
+        </div>
+      </form>
+
+      {% for tweet in tweets %}
+        {% set liked = tweet.likes.filter_by(user_id=user.id).first() %}
+        <article class="post">
+          <div class="post-head">
+            <img class="avatar" src="{{ tweet.author.profile_image or 'https://api.dicebear.com/9.x/avataaars/svg?seed=' ~ tweet.author.username }}" alt="">
+            <div>
+              <a class="post-author" href="{{ url_for('main.profile', username=tweet.author.username) }}">{{ tweet.author.username }}</a>
+              <span class="post-time">・ {{ tweet.timestamp.strftime('%m/%d %H:%M') }} ・ {{ tweet.author.public_age_zone }}</span>
+            </div>
+            <form class="post-menu" method="POST" action="{{ url_for('main.report_tweet', tweet_id=tweet.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="reason" value="不適切な投稿">
+              <button class="link-button" title="通報">…</button>
+            </form>
+          </div>
+          <p class="post-body">{{ tweet.body }}</p>
+          {% if tweet.image_url %}<img class="post-image" src="{{ tweet.image_url }}" alt="投稿画像">{% endif %}
+          <div class="post-actions">
+            <form method="POST" action="{{ url_for('main.like_tweet', tweet_id=tweet.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="link-button {% if liked %}liked{% endif %}" type="submit">♥ {{ tweet.likes.count() }}</button>
+            </form>
+            <span>☁ {{ tweet.replies.count() }}</span>
+            <button class="link-button" type="button" onclick="document.getElementById('reply-{{ tweet.id }}').toggleAttribute('hidden')">返信</button>
+            <span>↗</span>
+          </div>
+          <form id="reply-{{ tweet.id }}" class="reply-form" method="POST" action="{{ url_for('main.reply_tweet', tweet_id=tweet.id) }}" hidden>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <input name="body" maxlength="280" placeholder="返信を書く">
+            <button class="secondary-button" type="submit">送信</button>
+          </form>
+        </article>
+      {% else %}
+        <article class="post"><p class="post-body">まだ投稿がありません。最初の投稿をしてみましょう。</p></article>
+      {% endfor %}
+    </main>
+
+    <aside class="right-rail">
+      <section class="side-panel">
+        <div class="side-head"><span>{{ selected_zone }} トレンド</span><a href="{{ url_for('main.discover', zone=selected_zone) }}">もっと見る</a></div>
+        <div class="trend-card">
+          <div>{{ selected_zone }}のトレンドを<br>みんなでチェックしよう<br><br><span class="secondary-button">トレンドを見る</span></div>
+        </div>
+        {% for topic, count in trends %}
+          <p class="muted">#{{ topic }} ・ {{ count }}件</p>
+        {% endfor %}
+      </section>
+
+      <section class="side-panel">
+        <div class="side-head"><span>おすすめユーザー</span><a href="{{ url_for('main.discover') }}">もっと見る</a></div>
+        {% for suggested in suggested_users %}
+          <div class="user-row">
+            <img class="mini-avatar" src="{{ suggested.profile_image or 'https://api.dicebear.com/9.x/avataaars/svg?seed=' ~ suggested.username }}" alt="">
+            <div><strong>{{ suggested.username }}</strong><div class="muted">@{{ suggested.username }}</div></div>
+            <a class="secondary-button" href="{{ url_for('main.follow', username=suggested.username) }}">フォロー</a>
+          </div>
+        {% else %}
+          <p class="muted">同じゾーンのユーザーがまだ少ないようです。</p>
+        {% endfor %}
+      </section>
+
+      <section class="side-panel">
+        <div class="side-head"><span>人気のコミュニティ</span><a href="{{ url_for('main.discover') }}">もっと見る</a></div>
+        <div class="community-grid">
+          {% for community in communities %}
+            <div class="community">{{ community }}</div>
+          {% endfor %}
+        </div>
+      </section>
+    </aside>
+  </div>
 </body>
 </html>

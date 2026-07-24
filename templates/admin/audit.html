@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block title %}監査ログ - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>監査ログ</h1>
+  {% for log in logs %}
+    <p class="muted">{{ log.created_at.strftime('%m/%d %H:%M:%S') }} / user={{ log.user_id }} / {{ log.action }} / {{ log.detail }}</p>
+  {% else %}
+    <p class="muted">ログはまだありません。</p>
+  {% endfor %}
+</section>
+{% endblock %}

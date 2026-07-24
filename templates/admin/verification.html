@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block title %}本人確認 - Era{% endblock %}
+{% block content %}
+<section class="admin-panel">
+  <h1>本人確認管理</h1>
+  <p class="muted">生年月日・身分証・顔写真を確認し、Safe Zone を確定します。</p>
+</section>
+{% if pending_users %}
+  <section class="admin-grid">
+    {% for user in pending_users %}
+      <article class="admin-panel">
+        <h2>{{ user.username }}</h2>
+        <p class="muted">登録メール: {{ user.email }}</p>
+        <p class="muted">推定ゾーン: {{ user.public_age_zone }}</p>
+        <div class="admin-grid">
+          <div>
+            <h3>身分証明書</h3>
+            {% if user.id_card_image %}<img class="admin-image" src="{{ user.id_card_image }}" alt="身分証明書">{% else %}<p class="muted">画像なし</p>{% endif %}
+          </div>
+          <div>
+            <h3>顔写真</h3>
+            {% if user.face_scan_image %}<img class="admin-image" src="{{ user.face_scan_image }}" alt="顔写真">{% else %}<p class="muted">画像なし</p>{% endif %}
+          </div>
+        </div>
+        <form method="POST" action="{{ url_for('admin.approve_user', user_id=user.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="primary-button" type="submit">承認</button>
+        </form>
+        <form method="POST" action="{{ url_for('admin.reject_user', user_id=user.id) }}">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button class="secondary-button" type="submit">拒否</button>
+        </form>
+      </article>
+    {% endfor %}
+  </section>
+{% else %}
+  <section class="admin-panel"><p class="muted">現在、承認待ちの本人確認申請はありません。</p></section>
+{% endif %}
+{% endblock %}
